@@ -1,0 +1,32 @@
+[workspace]
+members = [
+    "plugins/*",
+    "crates/*",
+]
+default-members = [
+    "plugins/snb_adapter_stdin",
+    "crates/*",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+authors = ["kmiit <kmiit@foxmail.com>"]
+license = "GPL-3.0-only"
+readme = "README.md"
+homepage = "https://github.com/kmiit/shinobu"
+repository = "https://github.com/kmiit/shinobu"
+edition = "2024"
+rust-version = "1.96.0"
+
+[workspace.metadata.snb]
+abi_version = "0.1.0"
+
+[workspace.dependencies]
+snb_core = { path = "crates/snb_core" }
+snb_macros = { path = "crates/snb_macros" }
+snb_runtime = { path = "crates/snb_runtime" }
+
+anyhow = "1.0"
+log = "0.4"
+toml = "1.1.2"

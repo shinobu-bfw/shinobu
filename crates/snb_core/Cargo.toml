@@ -1,0 +1,18 @@
+[package]
+name = "snb_core"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+log = "0.4"
+tokio = { version = "1", features = ["rt"] }
+
+[build-dependencies]
+toml = { workspace = true }

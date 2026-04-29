@@ -1,0 +1,7 @@
+[example]
+key = "value"
+count = 42
+
+[example.nested]
+enabled = true
+tags = ["a", "b", "c"]
