@@ -14,6 +14,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow = { workspace = true }
+log = { workspace = true }
 rusqlite = { version = "0.39", features = ["bundled"] }
 snb_core = { workspace = true }
 snb_macros = { workspace = true }

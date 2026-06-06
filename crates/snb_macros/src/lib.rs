@@ -16,17 +16,22 @@ mod plugin;
 
 use proc_macro::TokenStream;
 
-/// Generate FFI exports for a Shinobu plugin struct.
+/// Generate the FFI exports for a Shinobu plugin struct, and optionally the
+/// whole `SnbPlugin` impl.
 ///
-/// Apply this to a struct that implements `SnbPlugin`.
-/// It generates three `extern "C"` functions:
+/// Bare `#[plugin]` emits only `create_plugin` / `destroy_plugin` / `plugin_abi`
+/// — pair it with a hand-written `SnbPlugin` impl (custom `on_load`/`on_event`).
 ///
-/// - `create_plugin` — allocates the plugin and returns a raw pointer.
-/// - `destroy_plugin` — deallocates the plugin from a raw pointer.
-/// - `plugin_abi` — returns the ABI version string from `Cargo.toml`.
+/// With metadata it also generates the `SnbPlugin` impl, folding in `set_bot`
+/// and `register_all` (requires a unit struct):
+///
+/// ```ignore
+/// #[plugin(name = "stdin", version = "0.1.0", kind = Adapter)]
+/// pub struct StdinAdapter;
+/// ```
 #[proc_macro_attribute]
-pub fn plugin(_attr: TokenStream, input: TokenStream) -> TokenStream {
-    plugin::new_plugin(input)
+pub fn plugin(attr: TokenStream, input: TokenStream) -> TokenStream {
+    plugin::expand(attr.into(), input.into()).into()
 }
 
 /// Generate a `CommandHandler` from a free function and auto-register it.
@@ -81,7 +86,7 @@ pub fn adapter(attr: TokenStream, input: TokenStream) -> TokenStream {
 /// ```ignore
 /// #[database]
 /// fn sqlite() -> SqliteDatabase {
-///     let path = PluginHelper::for_plugin("sqlite").data_dir().join("data.db");
+///     let path = context::bot().data_dir("sqlite").join("data.db");
 ///     SqliteDatabase::new("sqlite", path)
 /// }
 /// ```

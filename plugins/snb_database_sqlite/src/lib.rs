@@ -9,9 +9,8 @@ use std::sync::Mutex;
 
 use rusqlite::types::Value as RusqliteValue;
 use rusqlite::{Connection, params_from_iter};
-use snb_core::context::{BotContext, PluginHelper};
+use snb_core::context;
 use snb_core::database::{ColumnType, DatabaseDriver, QueryResult, Row, Value};
-use snb_core::plugin::{PluginType, SnbPlugin, Version};
 use snb_macros::{database, plugin};
 
 // -- SQLite database driver ---------------------------------------------------
@@ -147,47 +146,14 @@ impl DatabaseDriver for SqliteDatabase {
 /// may read the plugin's data directory from the context.
 #[database]
 fn sqlite_driver() -> SqliteDatabase {
-    let db_path = PluginHelper::for_plugin("sqlite")
-        .data_dir()
-        .join("data.db");
+    let db_path = context::bot().data_dir("sqlite").join("data.db");
     SqliteDatabase::new("sqlite", db_path)
 }
 
 // -- Plugin -------------------------------------------------------------------
 
-#[plugin]
+#[plugin(name = "sqlite", version = "0.1.0", kind = DatabaseDriver)]
 struct SqlitePlugin;
-
-impl SnbPlugin for SqlitePlugin {
-    fn new() -> Self {
-        Self
-    }
-
-    fn name(&self) -> &str {
-        "sqlite"
-    }
-
-    fn version(&self) -> Version {
-        Version {
-            major: 0,
-            minor: 1,
-            patch: 0,
-        }
-    }
-
-    fn plugin_type(&self) -> PluginType {
-        PluginType::DatabaseDriver
-    }
-
-    fn on_load(&mut self, ctx: std::sync::Arc<dyn BotContext>) {
-        snb_core::context::set_bot(ctx.clone());
-        let p = PluginHelper::for_plugin(self.name());
-        p.register_all();
-        p.info(&format!("v{} loaded!", self.version()));
-    }
-
-    fn on_unload(&mut self) {}
-}
 
 // -- Unit tests ---------------------------------------------------------------
 

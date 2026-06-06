@@ -14,7 +14,7 @@ use crate::common::parse_fn;
 /// Generates a hidden unit struct implementing [`Adapter`], whose sync `run`
 /// drives the async function via `run_async` (tokio runtime created inside the
 /// plugin's own cdylib), and registers it via `inventory` so
-/// [`register_all`](snb_core::context::PluginHelper::register_all) picks it up.
+/// [`register_all`](snb_core::context::register_all) picks it up.
 ///
 /// Adapters that need state should keep it in module-level globals (mirroring
 /// the framework's own `context::set_bot`), so the function stays stateless.

@@ -8,13 +8,13 @@ use crate::common::parse_fn;
 /// ```ignore
 /// #[database]
 /// fn sqlite() -> SqliteDatabase {
-///     let path = PluginHelper::for_plugin("sqlite").data_dir().join("data.db");
+///     let path = context::bot().data_dir("sqlite").join("data.db");
 ///     SqliteDatabase::new("sqlite", path)
 /// }
 /// ```
 ///
 /// The function returns any `DatabaseDriver`; the macro registers it via
-/// `inventory` so [`register_all`](snb_core::context::PluginHelper::register_all)
+/// `inventory` so [`register_all`](snb_core::context::register_all)
 /// constructs and registers it (after `set_bot`, so the body may read context).
 ///
 /// Unlike the behaviour macros, no metadata is needed: the driver supplies its

@@ -146,103 +146,39 @@ pub trait BotContext: Send + Sync {
     fn get_session_manager(&self) -> Arc<dyn SessionManager>;
 }
 
-/// Convenience extension for registering components without repeating the
-/// plugin name. Call [`PluginHelper::for_plugin`] once, then use the short
-/// methods.
+/// Register every command, hook, message handler, adapter, and database driver
+/// that this plugin declared via the `#[command]` / `#[hook]` /
+/// `#[message_handler]` / `#[adapter]` / `#[database]` macros, under
+/// `plugin_name`. Call once in `on_load`, after [`set_bot`].
+///
+/// Each macro emits an `inventory::submit!`; this walks those collections via
+/// the global [`bot`] and registers each item. This must live in `snb_core`
+/// (which is statically linked into every plugin `cdylib`) so `inventory::iter`
+/// reads *this* plugin's submissions — moving it behind a `dyn BotContext` call
+/// would iterate the host's (empty) registry instead.
 ///
 /// ```ignore
-/// let p = PluginHelper::for_plugin(self.name());
-/// p.register_all();   // registers everything declared via the macros
-/// p.info("loaded!");
+/// fn on_load(&mut self, ctx: Arc<dyn BotContext>) {
+///     snb_core::context::set_bot(ctx);
+///     snb_core::context::register_all(self.name());
+///     log::info!("loaded!");
+/// }
 /// ```
-pub struct PluginHelper<'a> {
-    name: &'a str,
-    bot: Arc<dyn BotContext>,
-}
-
-impl<'a> PluginHelper<'a> {
-    pub fn for_plugin(name: &'a str) -> Self {
-        Self { name, bot: bot() }
+pub fn register_all(plugin_name: &str) {
+    let bot = bot();
+    for reg in inventory::iter::<crate::registry::CommandRegistration> {
+        bot.register_command(plugin_name, (reg.factory)());
     }
-
-    /// Register every command, hook, message handler, adapter, and database
-    /// driver that was declared in this plugin via the `#[command]` / `#[hook]`
-    /// / `#[message_handler]` / `#[adapter]` / `#[database]` macros.
-    ///
-    /// Each macro emits an `inventory::submit!`; this walks those collections and
-    /// registers each item under the plugin's name. Since every plugin links its
-    /// own copy of `snb_core`, only this plugin's own declarations are seen.
-    pub fn register_all(&self) {
-        for reg in inventory::iter::<crate::registry::CommandRegistration> {
-            self.bot.register_command(self.name, (reg.factory)());
-        }
-        for reg in inventory::iter::<crate::registry::HookRegistration> {
-            self.bot.register_hook(self.name, (reg.factory)());
-        }
-        for reg in inventory::iter::<crate::registry::MessageHandlerRegistration> {
-            self.bot
-                .register_message_handler(self.name, (reg.factory)());
-        }
-        for reg in inventory::iter::<crate::registry::AdapterRegistration> {
-            self.bot.register_adapter(self.name, (reg.factory)());
-        }
-        for reg in inventory::iter::<crate::registry::DatabaseRegistration> {
-            self.bot.register_database(self.name, (reg.factory)());
-        }
+    for reg in inventory::iter::<crate::registry::HookRegistration> {
+        bot.register_hook(plugin_name, (reg.factory)());
     }
-
-    /// Get a previously registered database driver by plugin name.
-    pub fn get_database(&self, plugin_name: &str) -> Option<Arc<dyn DatabaseDriver>> {
-        self.bot.get_database(plugin_name)
+    for reg in inventory::iter::<crate::registry::MessageHandlerRegistration> {
+        bot.register_message_handler(plugin_name, (reg.factory)());
     }
-
-    /// Returns this plugin's data directory: `./data/<plugin_name>/`.
-    pub fn data_dir(&self) -> PathBuf {
-        self.bot.data_dir(self.name)
+    for reg in inventory::iter::<crate::registry::AdapterRegistration> {
+        bot.register_adapter(plugin_name, (reg.factory)());
     }
-
-    /// Log an info-level message under this plugin's name.
-    pub fn info(&self, msg: &str) {
-        self.bot.logger().info(self.name, msg);
-    }
-
-    /// Log a debug-level message under this plugin's name.
-    pub fn debug(&self, msg: &str) {
-        self.bot.logger().debug(self.name, msg);
-    }
-
-    /// Log a warn-level message under this plugin's name.
-    pub fn warn(&self, msg: &str) {
-        self.bot.logger().warn(self.name, msg);
-    }
-
-    /// Log an error-level message under this plugin's name.
-    pub fn error(&self, msg: &str) {
-        self.bot.logger().error(self.name, msg);
-    }
-
-    /// Returns a reference to the underlying [`BotContext`].
-    pub fn bot(&self) -> &Arc<dyn BotContext> {
-        &self.bot
-    }
-
-    /// Load a config file from `./configs/<relative_path>`.
-    ///
-    /// Returns UTF-8 text — parse it however your plugin needs.
-    pub fn load_config(&self, relative_path: &Path) -> io::Result<String> {
-        self.bot.load_config(relative_path)
-    }
-
-    /// Write a config file under this plugin's namespace (`./configs/<name>/`).
-    ///
-    /// Atomic write (tmp + rename). Returns `PermissionDenied` if the path
-    /// escapes the plugin's directory.
-    pub fn write_config(&self, relative_path: &Path, contents: &str) -> io::Result<()> {
-        self.bot.write_config(self.name, relative_path, contents)
-    }
-
-    /// Get the built-in session manager.
-    pub fn get_session_manager(&self) -> Arc<dyn SessionManager> {
-        self.bot.get_session_manager()
+    for reg in inventory::iter::<crate::registry::DatabaseRegistration> {
+        bot.register_database(plugin_name, (reg.factory)());
     }
 }

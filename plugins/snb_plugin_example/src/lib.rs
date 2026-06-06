@@ -3,16 +3,15 @@
 //! Registers sample commands (`/echo`, `/ping`), hooks, a message handler,
 //! session-based multi-turn echo, and a demo async adapter — all declared with
 //! the `#[command]` / `#[hook]` / `#[message_handler]` / `#[adapter]` macros and
-//! auto-registered via [`PluginHelper::register_all`].
+//! auto-registered via [`register_all`](snb_core::context::register_all).
 
 use std::sync::Arc;
 use std::time::Duration;
 
 use snb_core::command::CommandContext;
-use snb_core::context::{self, BotContext, PluginHelper};
+use snb_core::context::BotContext;
 use snb_core::event::Event;
 use snb_core::hook::HookType;
-use snb_core::plugin::{PluginType, SnbPlugin, Version};
 use snb_core::session::{SessionKey, SessionMessage, SessionState};
 use snb_macros::{adapter, command, hook, message_handler, plugin};
 
@@ -163,41 +162,14 @@ async fn demo_tick(bot: Arc<dyn BotContext>) {
 
 // -- Plugin ------------------------------------------------------------------
 
-#[plugin]
+#[plugin(name = "MyPlugin", version = "0.1.0", kind = Plugin)]
 struct MyPlugin;
-
-impl SnbPlugin for MyPlugin {
-    fn new() -> Self {
-        Self
-    }
-    fn name(&self) -> &str {
-        "MyPlugin"
-    }
-    fn version(&self) -> Version {
-        Version {
-            major: 0,
-            minor: 1,
-            patch: 0,
-        }
-    }
-    fn plugin_type(&self) -> PluginType {
-        PluginType::Plugin
-    }
-    fn on_load(&mut self, ctx: Arc<dyn BotContext>) {
-        context::set_bot(ctx);
-        let p = PluginHelper::for_plugin(self.name());
-        p.register_all();
-        p.info(&format!("v{} loaded!", self.version()));
-    }
-    fn on_unload(&mut self) {
-        log::info!("unloaded!");
-    }
-}
 
 // -- Unit test ---------------------------------------------------------------
 
 #[test]
 fn test_plugin_ffi() {
+    use snb_core::plugin::Version;
     use std::ffi::CStr;
 
     let ptr = create_plugin();

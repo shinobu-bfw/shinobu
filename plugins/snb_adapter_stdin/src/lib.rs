@@ -1,9 +1,8 @@
 use std::io::{self, BufRead};
 use std::sync::Arc;
 
-use snb_core::context::{BotContext, PluginHelper};
+use snb_core::context::BotContext;
 use snb_core::event::Event;
-use snb_core::plugin::{PluginType, SnbPlugin, Version};
 use snb_macros::{adapter, plugin};
 
 /// Built-in stdin adapter.
@@ -11,43 +10,12 @@ use snb_macros::{adapter, plugin};
 /// Reads lines from stdin and dispatches them as [`snb_core::event::EventType::Message`]
 /// events through [`BotContext::emit_event`].
 ///
-/// This also serves as a reference implementation for third-party adapters.
-/// To build your own, depend on `snb_core` + `snb_macros`, implement
-/// [`SnbPlugin`] with [`PluginType::Adapter`], and declare handlers with the
-/// `#[adapter]` / `#[command]` / `#[hook]` / `#[message_handler]` macros, then
-/// call [`PluginHelper::register_all`] in `on_load`.
-#[plugin]
+/// This also serves as a reference implementation for third-party adapters: the
+/// `#[plugin(...)]` form generates the whole `SnbPlugin` impl, and `#[adapter]` /
+/// `#[command]` / `#[hook]` / `#[message_handler]` declare and auto-register the
+/// plugin's components.
+#[plugin(name = "stdin", version = "0.1.0", kind = Adapter)]
 pub struct StdinAdapter;
-impl SnbPlugin for StdinAdapter {
-    fn new() -> Self {
-        Self
-    }
-
-    fn name(&self) -> &str {
-        "stdin"
-    }
-
-    fn version(&self) -> Version {
-        Version {
-            major: 0,
-            minor: 1,
-            patch: 0,
-        }
-    }
-
-    fn plugin_type(&self) -> PluginType {
-        PluginType::Adapter
-    }
-
-    fn on_load(&mut self, ctx: Arc<dyn BotContext>) {
-        snb_core::context::set_bot(ctx.clone());
-        let p = PluginHelper::for_plugin(self.name());
-        p.register_all();
-        p.info(&format!("v{} loaded!", self.version()));
-    }
-
-    fn on_unload(&mut self) {}
-}
 
 #[adapter]
 async fn stdin_reader(bot: Arc<dyn BotContext>) {

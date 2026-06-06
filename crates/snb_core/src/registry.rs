@@ -1,7 +1,7 @@
 //! Auto-registration registry backed by [`inventory`].
 //!
 //! The `#[command]` / `#[hook]` / `#[message_handler]` / `#[adapter]` macros emit
-//! an `inventory::submit!` for each annotated item. [`PluginHelper::register_all`]
+//! an `inventory::submit!` for each annotated item. [`register_all`](snb_core::context::register_all)
 //! then iterates these at `on_load` time and registers every collected item under
 //! the plugin's name — so authors no longer hand-write `register(...)` calls.
 //!
