@@ -1,11 +1,15 @@
 [workspace]
 members = [
-    "plugins/*",
     "crates/*",
+    "plugins/snb_adapter_stdin",
+    "plugins/snb_database_sqlite",
+    "plugins/snb_plugin_example",
 ]
 default-members = [
-    "plugins/snb_adapter_stdin",
-    "crates/*",
+    "crates/snb_cli",
+    "crates/snb_core",
+    "crates/snb_macros",
+    "crates/snb_runtime",
 ]
 resolver = "2"
 
@@ -27,7 +31,6 @@ snb_core = { path = "crates/snb_core" }
 snb_macros = { path = "crates/snb_macros" }
 snb_runtime = { path = "crates/snb_runtime" }
 
-anyhow = "1.0"
-log = "0.4"
-toml = "1.1.2"
-inventory = "0.3"
+anyhow = "1"
+log = "0"
+toml = "1"

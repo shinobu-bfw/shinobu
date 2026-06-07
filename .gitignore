@@ -8,4 +8,7 @@
 !/plugins/snb_plugin_example
 /data
 *.bak
+*.so
+*.dll
+*.dylib
 .claude

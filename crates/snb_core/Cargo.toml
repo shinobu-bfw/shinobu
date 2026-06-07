@@ -11,9 +11,9 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-log = "0.4"
+log = { workspace = true }
 tokio = { version = "1", features = ["rt"] }
-inventory = { workspace = true }
+inventory = "0"
 
 [build-dependencies]
 toml = { workspace = true }
