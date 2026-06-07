@@ -34,10 +34,28 @@ pub trait Adapter: Send + Sync {
 /// Used by the [`#[adapter]`](snb_macros::adapter) macro to bridge the authored
 /// `async fn run` to the synchronous [`Adapter::run`]. Adapters should prefer the
 /// macro over calling this directly.
+///
+/// A panic inside `future` is caught here rather than allowed to propagate.
+/// Adapters run on an OS thread the host spawned, driving a tokio runtime
+/// created *inside this plugin's cdylib*. If the unwind escaped `run` it would
+/// cross the cdylib → host boundary — a foreign frame the Rust runtime cannot
+/// unwind through, aborting the whole process ("Rust cannot catch foreign
+/// exceptions"). Catching it here, still inside the cdylib, lets a faulty
+/// adapter stop only itself while the host and other adapters keep running.
 pub fn run_async<F: std::future::Future<Output = ()> + Send>(future: F) {
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("run_async: failed to create tokio runtime");
-    rt.block_on(future);
+    let body = std::panic::AssertUnwindSafe(move || {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("run_async: failed to create tokio runtime");
+        rt.block_on(future);
+    });
+    if let Err(panic) = std::panic::catch_unwind(body) {
+        let msg = panic
+            .downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .or_else(|| panic.downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "non-string panic payload".to_string());
+        log::error!("adapter panicked and was contained; this adapter has stopped: {msg}");
+    }
 }
