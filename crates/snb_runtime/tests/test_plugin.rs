@@ -146,8 +146,10 @@ fn test_load_config() {
         .join("..")
         .join("configs");
 
-    // Create test.toml temporarily
-    let test_config_path = config_dir.join("test.toml");
+    // Create configs/<plugin>/test.toml temporarily
+    let plugin_config_dir = config_dir.join("test_load_config_plugin");
+    std::fs::create_dir_all(&plugin_config_dir).unwrap();
+    let test_config_path = plugin_config_dir.join("test.toml");
     let test_config_content = r#"[example]
 key = "value"
 count = 42
@@ -158,8 +160,8 @@ tags = ["a", "b", "c"]
 "#;
     std::fs::write(&test_config_path, test_config_content).unwrap();
 
-    // Ensure cleanup on test exit
-    let _cleanup = TestFileCleanup(test_config_path.clone());
+    // Ensure cleanup on test exit (removes the whole plugin config dir)
+    let _cleanup = TestFileCleanup(plugin_config_dir.clone());
 
     let bot = Arc::new(Bot::new(
         BotInfo {
@@ -175,7 +177,7 @@ tags = ["a", "b", "c"]
     ));
 
     // Deserialize from config text
-    let text = bot.load_config(Path::new("test.toml")).unwrap();
+    let text = bot.load_config("test_load_config_plugin", Path::new("test.toml")).unwrap();
     let config: TestConfig = toml::from_str(&text).unwrap();
 
     assert_eq!(config.example.key, "value");
@@ -189,7 +191,7 @@ tags = ["a", "b", "c"]
     assert_eq!(config, roundtripped);
 
     // Non-existent file
-    let err = bot.load_config(Path::new("no_such_file.toml")).unwrap_err();
+    let err = bot.load_config("test_load_config_plugin", Path::new("no_such_file.toml")).unwrap_err();
     assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
 }
 
@@ -222,7 +224,7 @@ fn test_write_config_ownership() {
     // plugin_a writes its own config; should succeed
     bot.write_config("plugin_a", Path::new("data.toml"), "[config]\nkey = \"a\"")
         .unwrap();
-    let content = bot.load_config(Path::new("plugin_a/data.toml")).unwrap();
+    let content = bot.load_config("plugin_a", Path::new("data.toml")).unwrap();
     assert_eq!(content, "[config]\nkey = \"a\"");
 
     // plugin_a tries to write into plugin_b's namespace; should be blocked
@@ -237,7 +239,7 @@ fn test_write_config_ownership() {
 
     // plugin_b's config should be untouched
     let err = bot
-        .load_config(Path::new("plugin_b/evil.toml"))
+        .load_config("plugin_b", Path::new("evil.toml"))
         .unwrap_err();
     assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
 

@@ -9,7 +9,6 @@ use std::sync::Mutex;
 
 use rusqlite::types::Value as RusqliteValue;
 use rusqlite::{Connection, params_from_iter};
-use snb_core::context;
 use snb_core::database::{ColumnType, DatabaseDriver, QueryResult, Row, Value};
 use snb_macros::{database, plugin};
 
@@ -146,7 +145,8 @@ impl DatabaseDriver for SqliteDatabase {
 /// may read the plugin's data directory from the context.
 #[database]
 fn sqlite_driver() -> SqliteDatabase {
-    let db_path = context::bot().data_dir("sqlite").join("data.db");
+    let plugin = snb_core::context::PluginHelper::new("sqlite");
+    let db_path = plugin.data_dir().join("data.db");
     SqliteDatabase::new("sqlite", db_path)
 }
 

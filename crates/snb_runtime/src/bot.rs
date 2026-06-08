@@ -169,13 +169,6 @@ impl Bot {
         self.databases.write().unwrap().remove(plugin_name);
     }
 
-    /// Resolve `relative_path` under `config_dir` and ensure it stays inside.
-    ///
-    /// Returns `PermissionDenied` if the canonical path escapes the config root.
-    fn safe_config_path(&self, relative_path: &Path) -> io::Result<PathBuf> {
-        self.safe_path_under(&self.config_dir, relative_path)
-    }
-
     /// Resolve `relative_path` under `root` and ensure the result is inside `root`.
     ///
     /// Rejects `..` components and checks the canonicalized path stays within
@@ -603,8 +596,9 @@ impl BotContext for Bot {
         dir
     }
 
-    fn load_config(&self, relative_path: &Path) -> io::Result<String> {
-        let full_path = self.safe_config_path(relative_path)?;
+    fn load_config(&self, plugin_name: &str, relative_path: &Path) -> io::Result<String> {
+        let plugin_root = self.config_dir.join(plugin_name);
+        let full_path = self.safe_path_under(&plugin_root, relative_path)?;
         std::fs::read_to_string(&full_path)
     }
 

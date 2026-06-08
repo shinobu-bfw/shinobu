@@ -108,17 +108,21 @@ pub trait BotContext: Send + Sync {
 
     // -- Config --
 
-    /// Load a config file from the `./configs/` directory.
+    /// Load a config file from this plugin's config namespace.
     ///
-    /// `relative_path` is resolved relative to the bot's config directory
-    /// (typically `./configs/`). Returns the file contents as UTF-8 text so
-    /// that each plugin can parse the format it expects (TOML, JSON, YAML, …).
+    /// `relative_path` is resolved under `./configs/<plugin_name>/`, mirroring
+    /// [`write_config`](Self::write_config) and [`data_dir`](Self::data_dir):
+    /// the plugin passes only the path below its namespace (e.g. `config.toml`)
+    /// and never its own name as a path component. The contents are returned as
+    /// UTF-8 text so each plugin can parse the format it expects (TOML, JSON,
+    /// YAML, …).
     ///
     /// # Errors
     ///
-    /// Returns an `io::Error` if the file does not exist or cannot be read,
-    /// or if the file is not valid UTF-8.
-    fn load_config(&self, relative_path: &Path) -> io::Result<String>;
+    /// Returns `PermissionDenied` if `relative_path` escapes the plugin's
+    /// config directory (e.g. `../other_plugin/...`), an `io::Error` if the
+    /// file does not exist or cannot be read, or if it is not valid UTF-8.
+    fn load_config(&self, plugin_name: &str, relative_path: &Path) -> io::Result<String>;
 
     /// Write a config file under `./configs/<plugin_name>/`.
     ///
@@ -180,5 +184,113 @@ pub fn register_all(plugin_name: &str) {
     }
     for reg in inventory::iter::<crate::registry::DatabaseRegistration> {
         bot.register_database(plugin_name, (reg.factory)());
+    }
+}
+
+/// Helper for scoped plugin config and data access.
+///
+/// Eliminates the need to pass `plugin_name` to every `load_config`,
+/// `write_config`, and `data_dir` call. Access via the [`plugin`] function
+/// which uses thread-local storage to track the current plugin context.
+///
+/// ```ignore
+/// fn on_load(&mut self, ctx: Arc<dyn BotContext>) {
+///     context::set_bot(ctx);
+///     context::set_plugin(self.name());
+///
+///     match context::plugin().load_config(Path::new("config.toml")) {
+///         Ok(content) => { /* ... */ }
+///         Err(_) => {
+///             context::plugin().write_config(Path::new("config.toml"), DEFAULT_CONFIG)?;
+///         }
+///     }
+/// }
+/// ```
+#[derive(Clone)]
+pub struct PluginHelper {
+    plugin_name: String,
+}
+
+thread_local! {
+    static CURRENT_PLUGIN: std::cell::RefCell<Option<String>> = std::cell::RefCell::new(None);
+}
+
+/// Set the current plugin name in thread-local storage.
+///
+/// Call once in `on_load` after [`set_bot`], before any calls to [`plugin`].
+/// Each plugin gets its own thread-local slot, so concurrent plugin operations
+/// on different threads don't interfere.
+///
+/// ```ignore
+/// fn on_load(&mut self, ctx: Arc<dyn BotContext>) {
+///     context::set_bot(ctx);
+///     context::set_plugin(self.name());
+///     context::register_all(self.name());
+/// }
+/// ```
+pub fn set_plugin(plugin_name: impl Into<String>) {
+    CURRENT_PLUGIN.with(|cell| {
+        *cell.borrow_mut() = Some(plugin_name.into());
+    });
+}
+
+/// Get a [`PluginHelper`] for the current plugin.
+///
+/// Returns a helper bound to the plugin name set by [`set_plugin`].
+/// Panics if called before `set_plugin`.
+///
+/// ```ignore
+/// // After set_plugin(self.name()) in on_load:
+/// let config = context::plugin().load_config(Path::new("config.toml"))?;
+/// let data_path = context::plugin().data_dir().join("state.db");
+/// ```
+pub fn plugin() -> PluginHelper {
+    CURRENT_PLUGIN.with(|cell| {
+        PluginHelper {
+            plugin_name: cell
+                .borrow()
+                .as_ref()
+                .expect("plugin name not set — call set_plugin() in on_load")
+                .clone(),
+        }
+    })
+}
+
+impl PluginHelper {
+    /// Create a new helper for the given plugin name.
+    ///
+    /// Most code should use [`plugin()`] instead, which reads from thread-local
+    /// storage. Use this constructor only when you need a helper for a different
+    /// plugin than the current one.
+    pub fn new(plugin_name: impl Into<String>) -> Self {
+        Self {
+            plugin_name: plugin_name.into(),
+        }
+    }
+
+    /// Load a config file from this plugin's namespace: `configs/<plugin_name>/`.
+    ///
+    /// Shorthand for `bot().load_config(plugin_name, relative_path)`.
+    pub fn load_config(&self, relative_path: &Path) -> io::Result<String> {
+        bot().load_config(&self.plugin_name, relative_path)
+    }
+
+    /// Write a config file to this plugin's namespace: `configs/<plugin_name>/`.
+    ///
+    /// Shorthand for `bot().write_config(plugin_name, relative_path, contents)`.
+    pub fn write_config(&self, relative_path: &Path, contents: &str) -> io::Result<()> {
+        bot().write_config(&self.plugin_name, relative_path, contents)
+    }
+
+    /// Get this plugin's data directory: `data/<plugin_name>/`.
+    ///
+    /// Shorthand for `bot().data_dir(plugin_name)`.
+    pub fn data_dir(&self) -> PathBuf {
+        bot().data_dir(&self.plugin_name)
+    }
+
+    /// Get the plugin name this helper was created for.
+    pub fn name(&self) -> &str {
+        &self.plugin_name
     }
 }
