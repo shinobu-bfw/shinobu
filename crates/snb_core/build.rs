@@ -13,9 +13,7 @@ fn find_workspace_root(manifest_dir: &Path) -> PathBuf {
                 return dir;
             }
         }
-        if !dir.pop() {
-            panic!("workspace root not found");
-        }
+        assert!(dir.pop(), "workspace root not found")
     }
 }
 

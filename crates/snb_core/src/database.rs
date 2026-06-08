@@ -44,6 +44,7 @@ pub struct Row {
 }
 
 impl Row {
+    #[must_use]
     pub fn get(&self, column: &str) -> Option<&Value> {
         self.columns
             .iter()
@@ -275,7 +276,8 @@ pub struct TableBuilder<'a> {
     if_not_exists: bool,
 }
 
-impl<'a> TableBuilder<'a> {
+impl TableBuilder<'_> {
+    #[must_use]
     pub fn column(
         mut self,
         name: &str,
@@ -296,6 +298,7 @@ impl<'a> TableBuilder<'a> {
         self
     }
 
+    #[must_use]
     pub fn if_not_exists(mut self) -> Self {
         self.if_not_exists = true;
         self
@@ -318,7 +321,7 @@ impl<'a> TableBuilder<'a> {
                 parts.push("NOT NULL".to_string());
             }
             if let Some(ref default) = c.default {
-                parts.push(format!("DEFAULT {}", default));
+                parts.push(format!("DEFAULT {default}"));
             }
             col_defs.push(parts.join(" "));
         }
@@ -345,7 +348,8 @@ pub struct InsertBuilder<'a> {
     pairs: Vec<(String, Value)>,
 }
 
-impl<'a> InsertBuilder<'a> {
+impl InsertBuilder<'_> {
+    #[must_use]
     pub fn set(mut self, column: &str, value: Value) -> Self {
         self.pairs.push((column.to_string(), value));
         self
@@ -381,27 +385,32 @@ pub struct SelectBuilder<'a> {
     offset_val: Option<u64>,
 }
 
-impl<'a> SelectBuilder<'a> {
+impl SelectBuilder<'_> {
+    #[must_use]
     pub fn column(mut self, name: &str) -> Self {
         self.columns.push(format!("\"{name}\""));
         self
     }
 
+    #[must_use]
     pub fn where_(mut self, cond: Condition) -> Self {
         self.conditions = Some(cond);
         self
     }
 
+    #[must_use]
     pub fn order_by(mut self, order: Order) -> Self {
         self.orders.push(order);
         self
     }
 
+    #[must_use]
     pub fn limit(mut self, n: u64) -> Self {
         self.limit_val = Some(n);
         self
     }
 
+    #[must_use]
     pub fn offset(mut self, n: u64) -> Self {
         self.offset_val = Some(n);
         self
@@ -454,12 +463,14 @@ pub struct UpdateBuilder<'a> {
     conditions: Option<Condition>,
 }
 
-impl<'a> UpdateBuilder<'a> {
+impl UpdateBuilder<'_> {
+    #[must_use]
     pub fn set(mut self, column: &str, value: Value) -> Self {
         self.pairs.push((column.to_string(), value));
         self
     }
 
+    #[must_use]
     pub fn where_(mut self, cond: Condition) -> Self {
         self.conditions = Some(cond);
         self
@@ -494,7 +505,8 @@ pub struct DeleteBuilder<'a> {
     conditions: Option<Condition>,
 }
 
-impl<'a> DeleteBuilder<'a> {
+impl DeleteBuilder<'_> {
+    #[must_use]
     pub fn where_(mut self, cond: Condition) -> Self {
         self.conditions = Some(cond);
         self

@@ -10,7 +10,7 @@ pub enum PluginType {
     Adapter,
     /// A general-purpose plugin (commands, hooks, message handlers).
     Plugin,
-    /// A database driver plugin (e.g., SQLite).
+    /// A database driver plugin (e.g., `SQLite`).
     DatabaseDriver,
 }
 
@@ -22,6 +22,7 @@ pub enum PluginType {
 ///
 /// The host only checks `major`; plugins compiled against the same
 /// major version are always accepted.
+#[must_use]
 pub fn snb_plugin_abi() -> Version {
     env!("SNB_ABI_VERSION")
         .parse()

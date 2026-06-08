@@ -32,7 +32,11 @@ struct TestFileCleanup(PathBuf);
 
 impl Drop for TestFileCleanup {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
+        if self.0.is_dir() {
+            let _ = std::fs::remove_dir_all(&self.0);
+        } else {
+            let _ = std::fs::remove_file(&self.0);
+        }
     }
 }
 
@@ -200,16 +204,18 @@ fn test_write_config_ownership() {
 
     init_test_logger();
 
-    let tmp = tempfile::tempdir().unwrap();
-    let config_dir = tmp.path();
+    let tmp = std::env::temp_dir().join(format!("snb_test_{}", std::process::id()));
+    std::fs::create_dir_all(&tmp).unwrap();
+    let _cleanup = TestFileCleanup(tmp.clone());
 
-    let data_dir = tmp.path().join("data");
+    let config_dir = tmp.clone();
+    let data_dir = tmp.join("data");
     let bot = Arc::new(Bot::new(
         BotInfo {
             name: "TestBot".into(),
         },
         Arc::new(EnvLogger::new()),
-        config_dir.to_path_buf(),
+        config_dir,
         data_dir,
     ));
 

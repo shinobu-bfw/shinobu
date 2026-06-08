@@ -35,7 +35,8 @@ impl SessionKey {
         }
     }
 
-    /// Canonical string representation for use as HashMap key.
+    /// Canonical string representation for use as `HashMap` key.
+    #[must_use]
     pub fn to_string_key(&self) -> String {
         match &self.user_id {
             Some(uid) => format!("{}:{}", self.chat_id, uid),
@@ -103,6 +104,7 @@ pub enum SessionState {
 }
 
 impl SessionState {
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Active => "active",
