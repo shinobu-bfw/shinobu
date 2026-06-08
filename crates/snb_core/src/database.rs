@@ -594,7 +594,7 @@ mod tests {
     fn value_display() {
         assert_eq!(Value::Null.to_string(), "NULL");
         assert_eq!(Value::Integer(42).to_string(), "42");
-        assert_eq!(Value::Real(3.14).to_string(), "3.14");
+        assert_eq!(Value::Real(3.15).to_string(), "3.15");
         assert_eq!(Value::Text("hi".into()).to_string(), "hi");
         assert_eq!(Value::Blob(vec![1, 2, 3]).to_string(), "<blob 3 bytes>");
     }

@@ -6,6 +6,7 @@ use snb_core::context::BotContext;
 use snb_core::event::{ContentItem, Event, FileSource};
 
 static BUILD_LIB: Once = Once::new();
+static INIT_LOGGER: Once = Once::new();
 
 fn ensure_lib_built() {
     BUILD_LIB.call_once(|| {
@@ -17,20 +18,31 @@ fn ensure_lib_built() {
     });
 }
 
+fn init_test_logger() {
+    INIT_LOGGER.call_once(|| {
+        let _ = env_logger::builder()
+            .filter_level(log::LevelFilter::Info)
+            .is_test(true)
+            .try_init();
+    });
+}
+
 #[test]
 fn test_plugin_load_and_commands() {
     use snb_core::bot::BotInfo;
     use snb_core::context::BotContext;
     use snb_runtime::bot::Bot;
-    use snb_runtime::logger::StdoutLogger;
+    use snb_runtime::logger::EnvLogger;
     use snb_runtime::plugin_manager::PluginLoader;
     use std::sync::Arc;
+
+    init_test_logger();
 
     let bot = Arc::new(Bot::new(
         BotInfo {
             name: "TestBot".into(),
         },
-        Arc::new(StdoutLogger::new(log::LevelFilter::Info)),
+        Arc::new(EnvLogger::new()),
         std::env::current_dir()
             .unwrap()
             .join("..")
@@ -109,9 +121,11 @@ fn test_load_config() {
     use snb_core::bot::BotInfo;
     use snb_core::context::BotContext;
     use snb_runtime::bot::Bot;
-    use snb_runtime::logger::StdoutLogger;
+    use snb_runtime::logger::EnvLogger;
     use std::path::Path;
     use std::sync::Arc;
+
+    init_test_logger();
 
     let config_dir = std::env::current_dir()
         .unwrap()
@@ -122,7 +136,7 @@ fn test_load_config() {
         BotInfo {
             name: "TestBot".into(),
         },
-        Arc::new(StdoutLogger::new(log::LevelFilter::Info)),
+        Arc::new(EnvLogger::new()),
         config_dir,
         std::env::current_dir()
             .unwrap()
@@ -155,9 +169,11 @@ fn test_write_config_ownership() {
     use snb_core::bot::BotInfo;
     use snb_core::context::BotContext;
     use snb_runtime::bot::Bot;
-    use snb_runtime::logger::StdoutLogger;
+    use snb_runtime::logger::EnvLogger;
     use std::path::Path;
     use std::sync::Arc;
+
+    init_test_logger();
 
     let tmp = tempfile::tempdir().unwrap();
     let config_dir = tmp.path();
@@ -167,7 +183,7 @@ fn test_write_config_ownership() {
         BotInfo {
             name: "TestBot".into(),
         },
-        Arc::new(StdoutLogger::new(log::LevelFilter::Info)),
+        Arc::new(EnvLogger::new()),
         config_dir.to_path_buf(),
         data_dir,
     ));
@@ -219,14 +235,16 @@ impl Adapter for CaptureAdapter {
 fn test_send_file_to_adapter() {
     use snb_core::bot::BotInfo;
     use snb_runtime::bot::Bot;
-    use snb_runtime::logger::StdoutLogger;
+    use snb_runtime::logger::EnvLogger;
+
+    init_test_logger();
 
     let adapter = Arc::new(CaptureAdapter::default());
     let bot = Bot::new(
         BotInfo {
             name: "TestBot".into(),
         },
-        Arc::new(StdoutLogger::new(log::LevelFilter::Info)),
+        Arc::new(EnvLogger::new()),
         std::env::current_dir().unwrap().join("configs"),
         std::env::current_dir().unwrap().join("data"),
     );

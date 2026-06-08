@@ -5,7 +5,7 @@ use snb_core::bot::BotInfo;
 use snb_core::context::{self, BotContext};
 use snb_core::logger::Logger;
 use snb_runtime::bot::Bot;
-use snb_runtime::logger::StdoutLogger;
+use snb_runtime::logger::EnvLogger;
 use snb_runtime::plugin_manager::PluginLoader;
 
 /// Load the log level from `configs/bot.toml`, defaulting to `Info`.
@@ -24,6 +24,14 @@ fn load_log_level(config_dir: &Path) -> log::LevelFilter {
         .unwrap_or(log::LevelFilter::Info)
 }
 
+/// Initialize env_logger with custom format and level filter
+fn init_logger(level: log::LevelFilter) {
+    env_logger::Builder::from_default_env()
+        .filter_level(level)
+        .format_timestamp_millis()
+        .init();
+}
+
 /// True for files that look like a Shinobu plugin shared library
 /// (e.g. `libsnb_adapter_stdin.so`, `snb_plugin_example.dll`).
 fn is_plugin_library(name: &str) -> bool {
@@ -37,8 +45,14 @@ async fn main() {
     let config_dir = cwd.join("configs");
     let data_root = cwd.join("data");
     let log_level = load_log_level(&config_dir);
-    let logger: Arc<dyn Logger> = Arc::new(StdoutLogger::new(log_level));
-    logger.info("shinobu", "Starting...");
+
+    // Initialize env_logger
+    init_logger(log_level);
+
+    log::info!("Starting Shinobu...");
+
+    // Use EnvLogger which delegates to env_logger
+    let logger: Arc<dyn Logger> = Arc::new(EnvLogger::new());
 
     let bot = Arc::new(Bot::new(
         BotInfo {

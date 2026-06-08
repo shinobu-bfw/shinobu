@@ -3,7 +3,7 @@
 //! Provides the concrete [`Bot`](bot::Bot) struct that implements
 //! [`BotContext`](snb_core::context::BotContext), along with a
 //! [`PluginLoader`](plugin_manager::PluginLoader) for dynamic `.so` loading,
-//! a [`StdoutLogger`](logger::StdoutLogger), and an
+//! an [`EnvLogger`](logger::EnvLogger), and an
 //! [`InMemorySessionManager`](session::InMemorySessionManager).
 
 pub mod bot;
