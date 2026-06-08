@@ -36,8 +36,49 @@ impl PluginLoader {
 
             let abi_str = CStr::from_ptr(abi_sym()).to_str()?;
             let abi: Version = abi_str.parse().map_err(|_| PluginError::UnsupportedAbi)?;
+
+            // Check ABI compatibility: major must match, minor must be <= runtime's
             if abi.major != current_plugin_abi.major {
+                self.bot.logger().error(
+                    "PluginLoader",
+                    &format!(
+                        "ABI major version mismatch: plugin={}, runtime={} (incompatible)",
+                        abi, current_plugin_abi
+                    ),
+                );
                 return Err(PluginError::UnsupportedAbi)?;
+            }
+
+            if abi.minor > current_plugin_abi.minor {
+                self.bot.logger().error(
+                    "PluginLoader",
+                    &format!(
+                        "ABI minor version too new: plugin={}, runtime={} (plugin needs features not available in runtime)",
+                        abi, current_plugin_abi
+                    ),
+                );
+                return Err(PluginError::UnsupportedAbi)?;
+            }
+
+            // Warn on minor or patch differences (backward compatible but potentially outdated)
+            if abi.minor < current_plugin_abi.minor {
+                self.bot.logger().warn(
+                    "PluginLoader",
+                    &format!(
+                        "ABI minor version mismatch: plugin={}, runtime={} (plugin built against older ABI, may miss new features)",
+                        abi, current_plugin_abi
+                    ),
+                );
+            }
+
+            if abi.patch != current_plugin_abi.patch {
+                self.bot.logger().warn(
+                    "PluginLoader",
+                    &format!(
+                        "ABI patch version mismatch: plugin={}, runtime={} (compatible but rebuild recommended)",
+                        abi, current_plugin_abi
+                    ),
+                );
             }
 
             let ptr = create_sym();
