@@ -140,14 +140,87 @@ fn build_named_plugin(
 
 fn list_plugins(root: &Path) -> Result<(), String> {
     let example_plugins: HashSet<&str> = EXAMPLE_PLUGINS.iter().copied().collect();
-    for plugin in discover_plugins(root)? {
-        let group = if example_plugins.contains(plugin.name.as_str()) {
-            "example"
-        } else {
-            "plugin"
-        };
-        println!("{}\t{group}\t{}", plugin.name, plugin.manifest.display());
+    let plugins = discover_plugins(root)?;
+
+    if plugins.is_empty() {
+        println!("No plugins found");
+        return Ok(());
     }
+
+    // Calculate column widths
+    let max_name_len = plugins.iter().map(|p| p.name.len()).max().unwrap_or(0);
+    let max_type_len = 7; // "example".len()
+
+    // Print header
+    println!(
+        "{:<width_name$}  {:<width_type$}  {}",
+        "\x1b[1mNAME\x1b[0m",
+        "\x1b[1mTYPE\x1b[0m",
+        "\x1b[1mPATH\x1b[0m",
+        width_name = max_name_len,
+        width_type = max_type_len
+    );
+
+    // Print separator
+    println!(
+        "{}  {}  {}",
+        "-".repeat(max_name_len),
+        "-".repeat(max_type_len),
+        "-".repeat(20)
+    );
+
+    // Group plugins by type
+    let mut plugin_list = Vec::new();
+    let mut example_list = Vec::new();
+
+    for plugin in plugins {
+        let is_example = example_plugins.contains(plugin.name.as_str());
+        let relative_path = plugin
+            .manifest
+            .strip_prefix(root)
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|_| plugin.manifest.display().to_string());
+
+        if is_example {
+            example_list.push((plugin.name, relative_path));
+        } else {
+            plugin_list.push((plugin.name, relative_path));
+        }
+    }
+
+    // Print plugins first
+    for (name, path) in &plugin_list {
+        println!(
+            "\x1b[32m{:<width_name$}\x1b[0m  \x1b[36m{:<width_type$}\x1b[0m  {}",
+            name,
+            "plugin",
+            path,
+            width_name = max_name_len,
+            width_type = max_type_len
+        );
+    }
+
+    // Print examples
+    for (name, path) in &example_list {
+        println!(
+            "\x1b[33m{:<width_name$}\x1b[0m  \x1b[90m{:<width_type$}\x1b[0m  \x1b[90m{}\x1b[0m",
+            name,
+            "example",
+            path,
+            width_name = max_name_len,
+            width_type = max_type_len
+        );
+    }
+
+    // Print summary
+    println!(
+        "\n\x1b[1mTotal:\x1b[0m {} plugin{}, {} example{}",
+        plugin_list.len(),
+        if plugin_list.len() == 1 { "" } else { "s" },
+        example_list.len(),
+        if example_list.len() == 1 { "" } else { "s" }
+    );
+
     Ok(())
 }
 
