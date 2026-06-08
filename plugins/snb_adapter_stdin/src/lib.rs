@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use snb_core::adapter::{Adapter, run_async};
 use snb_core::context::BotContext;
-use snb_core::event::{ContentItem, Event, FileSource};
+use snb_core::event::{ContentItem, Event, EventType, FileSource};
 use snb_macros::plugin;
 
 /// Built-in stdin adapter.
@@ -64,9 +64,20 @@ impl Adapter for StdinAdapter {
         let Some(message) = &event.message else {
             return Ok(());
         };
+        if event.event_type == EventType::MessageDelete {
+            if let Some(id) = &message.id {
+                println!("[delete] message id={id}");
+            }
+            return Ok(());
+        }
+        let prefix = if event.event_type == EventType::MessageEdit {
+            "[edit] "
+        } else {
+            ""
+        };
         for item in &message.content {
             match item {
-                ContentItem::Text { text, .. } => println!("{text}"),
+                ContentItem::Text { text, .. } => println!("{prefix}{text}"),
                 ContentItem::File {
                     source,
                     file_name,

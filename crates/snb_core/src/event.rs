@@ -10,6 +10,7 @@ pub enum EventType {
     Command,
     Message,
     MessageSent,
+    MessageEdit,
     MessageDelete,
     Other(String),
 }
@@ -291,6 +292,37 @@ impl Event {
                 id: Some(platform_message_id.into()),
                 reply_to: request_id,
                 content: Vec::new(),
+                from: None,
+                to: None,
+                at: Vec::new(),
+                chat_type: None,
+                delete_after: None,
+            }),
+            sender: None,
+            receiver: None,
+        }
+    }
+
+    /// Build an [`EventType::MessageEdit`] event that replaces the text of an
+    /// already-sent message identified by its native adapter id.
+    pub fn message_edit(
+        source: impl Into<String>,
+        platform_message_id: impl Into<String>,
+        text: impl Into<String>,
+        format: Option<TextFormat>,
+    ) -> Self {
+        Self {
+            event_type: EventType::MessageEdit,
+            source: source.into(),
+            data: String::new(),
+            command: None,
+            message: Some(Message {
+                id: Some(platform_message_id.into()),
+                reply_to: None,
+                content: vec![ContentItem::Text {
+                    text: text.into(),
+                    format,
+                }],
                 from: None,
                 to: None,
                 at: Vec::new(),
