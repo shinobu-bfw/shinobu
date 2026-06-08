@@ -186,5 +186,5 @@ fn test_plugin_ffi() {
     );
 
     let abi = unsafe { CStr::from_ptr(plugin_abi()).to_str().unwrap() };
-    assert_eq!(abi, "0.1.0");
+    assert_eq!(abi, snb_core::plugin::snb_plugin_abi().to_string());
 }

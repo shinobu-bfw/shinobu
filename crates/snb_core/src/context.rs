@@ -81,6 +81,8 @@ pub trait BotContext: Send + Sync {
     fn register_plugin(&self, plugin: PluginCell);
     fn unregister_plugin(&self, name: &str) -> bool;
     fn list_plugins(&self) -> Vec<String>;
+    fn load_plugin(self: Arc<Self>, path: &Path) -> anyhow::Result<()>;
+    fn unload_plugin(self: Arc<Self>, name: &str) -> anyhow::Result<()>;
 
     /// Returns a snapshot of the named plugin's identity.
     ///
@@ -252,14 +254,12 @@ pub fn set_plugin(plugin_name: impl Into<String>) {
 /// let data_path = context::plugin().data_dir().join("state.db");
 /// ```
 pub fn plugin() -> PluginHelper {
-    CURRENT_PLUGIN.with(|cell| {
-        PluginHelper {
-            plugin_name: cell
-                .borrow()
-                .as_ref()
-                .expect("plugin name not set — call set_plugin() in on_load")
-                .clone(),
-        }
+    CURRENT_PLUGIN.with(|cell| PluginHelper {
+        plugin_name: cell
+            .borrow()
+            .as_ref()
+            .expect("plugin name not set — call set_plugin() in on_load")
+            .clone(),
     })
 }
 

@@ -1,4 +1,6 @@
+use std::any::Any;
 use std::collections::HashMap;
+use std::ffi::CStr;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
@@ -9,11 +11,12 @@ use snb_core::bot::BotInfo;
 use snb_core::command::{CommandContext, CommandHandler};
 use snb_core::context::BotContext;
 use snb_core::database::DatabaseDriver;
+use snb_core::error::PluginError;
 use snb_core::event::*;
 use snb_core::hook::{Hook, HookType};
 use snb_core::logger::Logger;
 use snb_core::message_handler::MessageHandler;
-use snb_core::plugin::{PluginCell, PluginInfo};
+use snb_core::plugin::{PluginCell, PluginInfo, SnbPlugin, Version, snb_plugin_abi};
 use snb_core::session::SessionManager;
 
 struct CommandEntry {
@@ -367,6 +370,105 @@ impl BotContext for Bot {
 
     fn list_plugins(&self) -> Vec<String> {
         self.plugin_infos.read().unwrap().keys().cloned().collect()
+    }
+
+    fn load_plugin(self: Arc<Self>, path: &Path) -> anyhow::Result<()> {
+        let current_plugin_abi = snb_plugin_abi();
+        let lib = unsafe { libloading::Library::new(path)? };
+
+        let (ptr, destroy_fn, ffi_abi) = unsafe {
+            let create_sym: libloading::Symbol<unsafe extern "C" fn() -> *mut Box<dyn SnbPlugin>> =
+                lib.get(b"create_plugin")?;
+            let destroy_sym: libloading::Symbol<unsafe extern "C" fn(*mut Box<dyn SnbPlugin>)> =
+                lib.get(b"destroy_plugin")?;
+            let abi_sym: libloading::Symbol<unsafe extern "C" fn() -> *const std::ffi::c_char> =
+                lib.get(b"plugin_abi")?;
+
+            let abi_str = CStr::from_ptr(abi_sym()).to_str()?;
+            let abi: Version = abi_str.parse().map_err(|_| PluginError::UnsupportedAbi)?;
+
+            if abi.major != current_plugin_abi.major {
+                log::error!(
+                    "ABI major version mismatch: plugin={}, runtime={} (incompatible)",
+                    abi,
+                    current_plugin_abi
+                );
+                return Err(PluginError::UnsupportedAbi)?;
+            }
+
+            if abi.minor > current_plugin_abi.minor {
+                log::error!(
+                    "ABI minor version too new: plugin={}, runtime={} (plugin needs features not available in runtime)",
+                    abi,
+                    current_plugin_abi
+                );
+                return Err(PluginError::UnsupportedAbi)?;
+            }
+
+            if abi.minor < current_plugin_abi.minor {
+                log::warn!(
+                    "ABI minor version mismatch: plugin={}, runtime={} (plugin built against older ABI, may miss new features)",
+                    abi,
+                    current_plugin_abi
+                );
+            }
+
+            if abi.patch != current_plugin_abi.patch {
+                log::warn!(
+                    "ABI patch version mismatch: plugin={}, runtime={} (compatible but rebuild recommended)",
+                    abi,
+                    current_plugin_abi
+                );
+            }
+
+            let ptr = create_sym();
+            let destroy_fn = *destroy_sym;
+            (ptr, destroy_fn, abi)
+        };
+        let keep_alive: Box<dyn Any + Send + Sync> = Box::new(lib);
+        let mut cell = unsafe { PluginCell::new(ptr, destroy_fn, keep_alive) };
+
+        if cell.abi_version().major != ffi_abi.major {
+            log::warn!(
+                "Plugin {} ABI major {} does not match plugin_abi export major {}",
+                cell.name(),
+                cell.abi_version().major,
+                ffi_abi.major
+            );
+            return Err(PluginError::BrokenAbi)?;
+        }
+
+        let name = cell.name().to_string();
+        if self.get_plugin(&name).is_some() {
+            log::error!("plugin '{}' is already loaded; refusing duplicate", name);
+            return Err(PluginError::DuplicatePlugin)?;
+        }
+
+        self.begin_plugin_load();
+        cell.on_load(self.clone());
+        let conflicts = self.take_plugin_load_conflicts();
+        if !conflicts.is_empty() {
+            log::error!(
+                "refusing plugin '{}': {} name conflict(s): {}",
+                name,
+                conflicts.len(),
+                conflicts.join("; ")
+            );
+            cell.on_unload();
+            self.rollback_plugin_components(&name);
+            return Err(PluginError::ComponentConflict)?;
+        }
+
+        self.register_plugin(cell);
+        Ok(())
+    }
+
+    fn unload_plugin(self: Arc<Self>, name: &str) -> anyhow::Result<()> {
+        if self.unregister_plugin(name) {
+            Ok(())
+        } else {
+            Err(PluginError::UnloadError)?
+        }
     }
 
     fn emit_event(&self, mut event: Event) {
