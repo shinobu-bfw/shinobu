@@ -47,6 +47,29 @@ fn resolve_plugin_uses_root_relative_path_as_fallback() {
 }
 
 #[test]
+fn plugin_matches_snb_source_package_name() {
+    let root = workspace_root();
+    let plugin = PluginBuild {
+        name: "custom_plugin_dir".to_string(),
+        manifest: generated_snb_manifest(&root, "custom_plugin_dir"),
+        kind: PluginBuildKind::SnbSource(SnbSourceBuild {
+            plugin_dir: root.join("plugins").join("custom_plugin_dir"),
+            source: root
+                .join("plugins")
+                .join("custom_plugin_dir")
+                .join("src")
+                .join("compat.rs"),
+            package_name: "snb_custom_plugin".to_string(),
+            package_version: "0.1.0".to_string(),
+            dependency_name: "custom_plugin".to_string(),
+            dependencies: toml::Table::new(),
+        }),
+    };
+
+    assert!(plugin_matches(&plugin, "snb_custom_plugin"));
+}
+
+#[test]
 fn find_current_plugin_dir_walks_up_from_plugin_subdir() {
     let root = workspace_root();
     let current_dir = root.join("plugins").join("snb_plugin_example").join("src");

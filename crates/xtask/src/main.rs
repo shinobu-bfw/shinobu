@@ -520,7 +520,7 @@ fn resolve_plugin(
 
     let matches = discover_plugins(root)?
         .into_iter()
-        .filter(|candidate| plugin_name_matches(&candidate.name, plugin_name))
+        .filter(|candidate| plugin_matches(candidate, plugin_name))
         .collect::<Vec<_>>();
 
     match matches.as_slice() {
@@ -574,6 +574,17 @@ fn find_current_plugin_dir(root: &Path, current_dir: &Path) -> Option<PathBuf> {
 
 fn has_plugin_manifest(dir: &Path) -> bool {
     dir.join(SNB_MANIFEST).is_file() || dir.join("Cargo.toml").is_file()
+}
+
+fn plugin_matches(plugin: &PluginBuild, requested: &str) -> bool {
+    if plugin_name_matches(&plugin.name, requested) {
+        return true;
+    }
+
+    match &plugin.kind {
+        PluginBuildKind::Cargo => false,
+        PluginBuildKind::SnbSource(build) => plugin_name_matches(&build.package_name, requested),
+    }
 }
 
 fn plugin_name_matches(dir_name: &str, requested: &str) -> bool {
@@ -917,7 +928,7 @@ fn usage() -> &'static str {
   cargo xtask list-plugins
   cargo xtask build-plugin
   cargo xtask build-plugin .
-  cargo xtask build-plugin payload_extract_bot
+  cargo xtask build-plugin plugin_name
   cargo xtask build-plugin tg --release
   cargo xtask build-all
   cargo xtask clean
@@ -926,8 +937,8 @@ fn usage() -> &'static str {
   Plugin names support fuzzy matching:
   - Short names: 'tg' matches 'snb_adapter_tg'
   - With/without prefix: 'adapter_tg' or 'snb_adapter_tg'
-  - With/without suffix: 'payload_extract_bot' matches 'payload_extract_bot-rs'
-  - Hyphen/underscore: 'payload-extract-bot' matches 'payload_extract_bot'"
+  - With/without suffix: 'plugin_name' matches 'plugin_name-rs'
+  - Hyphen/underscore: 'plugin-name' matches 'plugin_name'"
 }
 
 fn print_usage_and_exit() -> ! {
