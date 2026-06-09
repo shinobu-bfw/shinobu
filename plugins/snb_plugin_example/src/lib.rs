@@ -166,26 +166,6 @@ async fn demo_tick(bot: Arc<dyn BotContext>) {
 #[plugin(name = "MyPlugin", version = "0.1.0", kind = Plugin)]
 struct MyPlugin;
 
-// -- Unit test ---------------------------------------------------------------
-
-#[test]
-fn test_plugin_ffi() {
-    use snb_core::plugin::Version;
-    use std::ffi::CStr;
-
-    let ptr = create_plugin();
-    let cell = unsafe { snb_core::plugin::PluginCell::new(ptr, destroy_plugin, Box::new(())) };
-
-    assert_eq!(cell.name(), "MyPlugin");
-    assert_eq!(
-        cell.version(),
-        Version {
-            major: 0,
-            minor: 1,
-            patch: 0,
-        }
-    );
-
-    let abi = unsafe { CStr::from_ptr(plugin_abi()).to_str().unwrap() };
-    assert_eq!(abi, snb_core::plugin::snb_plugin_abi().to_string());
-}
+#[cfg(test)]
+#[path = "../tests/unit/lib_tests.rs"]
+mod lib_tests;
