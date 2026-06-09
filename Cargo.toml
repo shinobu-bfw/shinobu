@@ -15,7 +15,7 @@ default-members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.3"
+version = "0.1.4"
 authors = ["kmiit <kmiit@foxmail.com>"]
 license = "GPL-3.0-only"
 readme = "README.md"
@@ -25,7 +25,7 @@ edition = "2024"
 rust-version = "1.96.0"
 
 [workspace.metadata.snb]
-abi_version = "0.2.0"
+abi_version = "0.3.0"
 
 [workspace.dependencies]
 snb_core = { path = "crates/snb_core" }

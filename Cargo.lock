@@ -481,7 +481,7 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "snb_adapter_stdin"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "anyhow",
  "log",
@@ -491,7 +491,7 @@ dependencies = [
 
 [[package]]
 name = "snb_cli"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "env_logger",
  "log",
@@ -503,7 +503,7 @@ dependencies = [
 
 [[package]]
 name = "snb_core"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "anyhow",
  "inventory",
@@ -515,7 +515,7 @@ dependencies = [
 
 [[package]]
 name = "snb_database_sqlite"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "anyhow",
  "log",
@@ -526,7 +526,7 @@ dependencies = [
 
 [[package]]
 name = "snb_macros"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -535,7 +535,7 @@ dependencies = [
 
 [[package]]
 name = "snb_plugin_example"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "anyhow",
  "log",
@@ -546,7 +546,7 @@ dependencies = [
 
 [[package]]
 name = "snb_runtime"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "anyhow",
  "env_logger",
@@ -560,7 +560,7 @@ dependencies = [
 
 [[package]]
 name = "snb_status"
-version = "0.1.3"
+version = "0.1.4"
 
 [[package]]
 name = "sqlite-wasm-rs"
@@ -761,7 +761,7 @@ checksum = "0592e1c9d151f854e6fd382574c3a0855250e1d9b2f99d9281c6e6391af352f1"
 
 [[package]]
 name = "xtask"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "toml",
 ]
