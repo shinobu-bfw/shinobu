@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use crate::session::InMemorySessionManager;
 use snb_core::adapter::Adapter;
 use snb_core::bot::BotInfo;
-use snb_core::command::{CommandContext, CommandHandler, CommandSpec};
+use snb_core::command::{CommandContext, CommandHandler, CommandSpec, CommandVisibility};
 use snb_core::context::BotContext;
 use snb_core::database::DatabaseDriver;
 use snb_core::error::PluginError;
@@ -339,6 +339,16 @@ impl Bot {
                 return;
             }
         };
+
+        if cmd.visibility() == CommandVisibility::Admin
+            && !event.message.as_ref().is_some_and(|m| m.is_admin)
+        {
+            self.logger.debug(
+                "Bot",
+                &format!("ignoring admin-only command '{}' from non-admin", parsed.cmd),
+            );
+            return;
+        }
 
         self.run_hooks(HookPhase::BeforeCommand, event);
 
