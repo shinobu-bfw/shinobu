@@ -41,12 +41,6 @@ struct AdapterEntry {
     adapter: Arc<dyn Adapter>,
 }
 
-#[allow(dead_code)]
-struct DatabaseDriverEntry {
-    plugin_name: String,
-    db: Arc<dyn DatabaseDriver>,
-}
-
 /// Phase indicator passed to [`Bot::run_hooks`].
 ///
 /// Distinct from [`HookType`] because dispatch needs to ask "what phase
@@ -78,7 +72,7 @@ pub struct Bot {
     hooks: RwLock<Vec<HookEntry>>,
     message_handlers: RwLock<Vec<MessageHandlerEntry>>,
     adapters: Mutex<Vec<AdapterEntry>>,
-    databases: RwLock<HashMap<String, DatabaseDriverEntry>>,
+    databases: RwLock<HashMap<String, Arc<dyn DatabaseDriver>>>,
     session_manager: Arc<dyn SessionManager>,
     /// Name conflicts recorded while a plugin's `on_load` runs. The plugin
     /// loader brackets `on_load` with [`Bot::begin_plugin_load`] /
@@ -695,21 +689,14 @@ impl BotContext for Bot {
     fn register_database(&self, plugin_name: &str, db: Arc<dyn DatabaseDriver>) {
         self.logger
             .info(plugin_name, &format!("registered database '{}'", db.name()));
-        self.databases.write().unwrap().insert(
-            plugin_name.to_string(),
-            DatabaseDriverEntry {
-                plugin_name: plugin_name.to_string(),
-                db,
-            },
-        );
+        self.databases
+            .write()
+            .unwrap()
+            .insert(plugin_name.to_string(), db);
     }
 
     fn get_database(&self, plugin_name: &str) -> Option<Arc<dyn DatabaseDriver>> {
-        self.databases
-            .read()
-            .unwrap()
-            .get(plugin_name)
-            .map(|e| e.db.clone())
+        self.databases.read().unwrap().get(plugin_name).cloned()
     }
 
     fn data_dir(&self, plugin_name: &str) -> PathBuf {
