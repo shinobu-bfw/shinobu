@@ -1,5 +1,5 @@
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::CStr;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -154,10 +154,11 @@ impl Bot {
             to_remove
         };
         if !removed_canonicals.is_empty() {
+            let removed: HashSet<&str> = removed_canonicals.iter().map(String::as_str).collect();
             self.aliases
                 .write()
                 .unwrap()
-                .retain(|_, canonical| !removed_canonicals.contains(canonical));
+                .retain(|_, canonical| !removed.contains(canonical.as_str()));
         }
 
         self.hooks
