@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use crate::session::InMemorySessionManager;
 use snb_core::adapter::Adapter;
 use snb_core::bot::BotInfo;
-use snb_core::command::{CommandContext, CommandHandler};
+use snb_core::command::{CommandContext, CommandHandler, CommandSpec};
 use snb_core::context::BotContext;
 use snb_core::database::DatabaseDriver;
 use snb_core::error::PluginError;
@@ -832,6 +832,25 @@ impl BotContext for Bot {
 
     fn get_database(&self, plugin_name: &str) -> Option<Arc<dyn DatabaseDriver>> {
         self.databases.read().unwrap().get(plugin_name).cloned()
+    }
+
+    fn commands(&self) -> Vec<CommandSpec> {
+        self.commands
+            .read()
+            .unwrap()
+            .values()
+            .map(|entry| CommandSpec {
+                name: entry.command.name().to_string(),
+                aliases: entry
+                    .command
+                    .aliases()
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
+                description: entry.command.description().to_string(),
+                visibility: entry.command.visibility(),
+            })
+            .collect()
     }
 
     fn data_dir(&self, plugin_name: &str) -> PathBuf {

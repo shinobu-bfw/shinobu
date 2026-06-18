@@ -96,6 +96,13 @@ pub trait BotContext: Send + Sync {
     /// ```
     fn get_plugin(&self, name: &str) -> Option<PluginInfo>;
 
+    /// Returns a snapshot of every registered command's metadata.
+    ///
+    /// Used by adapters to populate a platform command menu (e.g. Telegram's
+    /// `setMyCommands`). One entry per canonical command; aliases are listed
+    /// inside each [`crate::command::CommandSpec`].
+    fn commands(&self) -> Vec<crate::command::CommandSpec>;
+
     // -- Component registration (called by plugins during on_load) --
 
     fn register_command(&self, plugin_name: &str, command: Arc<dyn CommandHandler>);
