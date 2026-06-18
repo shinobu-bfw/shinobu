@@ -28,6 +28,14 @@ use crate::event::Event;
 pub trait Adapter: Send + Sync {
     fn run(&self, bot: Arc<dyn BotContext>);
 
+    /// Signal this adapter to stop its `run` loop.
+    ///
+    /// Called by the host on unload, before it waits for the adapter's thread to
+    /// finish. Must not block — just trip a flag/token that `run`'s loop checks.
+    /// The default no-op keeps existing adapters compiling; an adapter that never
+    /// stops is leaked on unload (the host won't unmap code a live thread runs).
+    fn stop(&self) {}
+
     /// Send an outgoing event through this adapter.
     ///
     /// Adapters that support platform output should inspect the event's message

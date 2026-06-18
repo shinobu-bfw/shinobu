@@ -16,12 +16,13 @@ pub enum PluginType {
 
 /// ABI version — read from `[package.metadata.snb].abi_version` in Cargo.toml.
 ///
-/// Bump this **only** when the plugin-facing ABI breaks backward
-/// compatibility (e.g. `SnbPlugin` trait, `BotContext` trait,
-/// `Event`/`PluginCell` layout changes, etc.).
+/// Bump on any plugin-facing ABI break (`SnbPlugin` / `BotContext` / `Adapter`
+/// trait or `Event` / `PluginCell` layout changes). In `0.x` the **minor** is the
+/// breaking position (semver-zero); from `1.x` on, bump the **major**.
 ///
-/// The host only checks `major`; plugins compiled against the same
-/// major version are always accepted.
+/// The host rejects a `major` mismatch, a `minor` newer than its own, and — while
+/// `major == 0` — any `minor` mismatch. A `1.x+` older minor loads (additive);
+/// `patch` differences only warn.
 #[must_use]
 pub fn snb_plugin_abi() -> Version {
     env!("SNB_ABI_VERSION")

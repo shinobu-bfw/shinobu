@@ -67,5 +67,9 @@ pub fn name_method<T: ToTokens>(args: &MetaArgs, src: &T) -> syn::Result<TokenSt
 
 /// Build a `fn priority(&self) -> u32` body from an optional `priority = N` arg.
 pub fn priority_method(args: &MetaArgs) -> TokenStream {
-    if let Some(expr) = args.get("priority") { quote! { fn priority(&self) -> u32 { #expr } } } else { quote! { fn priority(&self) -> u32 { 0 } } }
+    if let Some(expr) = args.get("priority") {
+        quote! { fn priority(&self) -> u32 { #expr } }
+    } else {
+        quote! { fn priority(&self) -> u32 { 0 } }
+    }
 }

@@ -98,11 +98,13 @@ impl SessionManager for InMemorySessionManager {
     }
 
     fn set_state(&self, key: &SessionKey, state: SessionState) {
+        // A state change counts as activity: refresh last_active and run the
+        // throttled eviction, mirroring append_message.
         let mut sessions = self.sessions.write().unwrap();
-        sessions
-            .entry(key.clone())
-            .or_insert_with(SessionData::new)
-            .state = state;
+        self.maybe_evict(&mut sessions);
+        let data = sessions.entry(key.clone()).or_insert_with(SessionData::new);
+        data.state = state;
+        data.last_active = Instant::now();
     }
 
     fn get_state(&self, key: &SessionKey) -> SessionState {

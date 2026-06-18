@@ -1,10 +1,15 @@
 use std::io::{self, BufRead};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use snb_core::adapter::{Adapter, run_async};
 use snb_core::context::BotContext;
 use snb_core::event::{ChatType, ContentItem, Event, EventType, FileSource, Message};
 use snb_macros::plugin;
+
+/// Set by [`Adapter::stop`]; the reader loop checks it. Module-level since the
+/// adapter is a stateless unit struct.
+static STOP: AtomicBool = AtomicBool::new(false);
 
 /// Built-in stdin adapter.
 ///
@@ -21,6 +26,12 @@ pub struct StdinAdapter;
 async fn stdin_reader(bot: Arc<dyn BotContext>) {
     let stdin = io::stdin();
     for line in stdin.lock().lines() {
+        // Best-effort stop: lines() blocks on the read, so this is only seen once
+        // the next line arrives. An idle reader is reclaimed via the host's
+        // leak-on-timeout fallback instead.
+        if STOP.load(Ordering::Relaxed) {
+            break;
+        }
         let text = match line {
             Ok(t) if !t.is_empty() => t,
             _ => break,
@@ -81,6 +92,10 @@ fn parse_file_message(args: &str) -> Option<Event> {
 impl Adapter for StdinAdapter {
     fn run(&self, bot: Arc<dyn BotContext>) {
         run_async(stdin_reader(bot));
+    }
+
+    fn stop(&self) {
+        STOP.store(true, Ordering::Relaxed);
     }
 
     fn send(&self, event: &Event) -> anyhow::Result<()> {

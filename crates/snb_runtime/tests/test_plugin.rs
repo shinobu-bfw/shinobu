@@ -116,6 +116,11 @@ fn test_plugin_load_and_commands() {
     assert_eq!(ctx.status().plugin_count, 1);
 
     loader.unload_plugin("MyPlugin").unwrap();
+
+    // After unload the plugin and all of its components are gone.
+    assert!(bot.get_plugin("MyPlugin").is_none());
+    assert!(!bot.list_plugins().contains(&"MyPlugin".to_string()));
+    assert_eq!(bot.status().plugin_count, 0);
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]

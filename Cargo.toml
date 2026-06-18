@@ -19,13 +19,13 @@ version = "0.1.4"
 authors = ["kmiit <kmiit@foxmail.com>"]
 license = "GPL-3.0-only"
 readme = "README.md"
-homepage = "https://github.com/kmiit/shinobu"
-repository = "https://github.com/kmiit/shinobu"
+homepage = "https://github.com/shinobu-bfw/shinobu"
+repository = "https://github.com/shinobu-bfw/shinobu"
 edition = "2024"
 rust-version = "1.96.0"
 
 [workspace.metadata.snb]
-abi_version = "0.3.0"
+abi_version = "0.4.0"
 
 [workspace.dependencies]
 snb_core = { path = "crates/snb_core" }
@@ -38,7 +38,7 @@ log = "0"
 toml = "1"
 
 [profile.release]
-# keep panic = "unwind": plugin panic containment relies on catch_unwind
+panic = "unwind"
 strip = "symbols"
 lto = "thin"
 codegen-units = 1

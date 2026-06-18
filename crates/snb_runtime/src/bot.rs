@@ -41,6 +41,32 @@ struct AdapterEntry {
     adapter: Arc<dyn Adapter>,
 }
 
+/// A plugin component `Arc` removed from the registries during unload, kept so
+/// [`Bot::unregister_plugin`] can wait until no in-flight dispatch (or running
+/// adapter thread) still holds a clone before the dylib is unmapped — each
+/// variant's code and vtable live in that dylib.
+enum DrainArc {
+    Command(Arc<dyn CommandHandler>),
+    Hook(Arc<dyn Hook>),
+    Message(Arc<dyn MessageHandler>),
+    Adapter(Arc<dyn Adapter>),
+    Database(Arc<dyn DatabaseDriver>),
+}
+
+impl DrainArc {
+    /// True when this is the sole remaining reference (safe to drop / unmap). No
+    /// `Weak`s are handed out, so `Arc::get_mut` is an exact "nobody else" check.
+    fn is_unique(&mut self) -> bool {
+        match self {
+            DrainArc::Command(a) => Arc::get_mut(a).is_some(),
+            DrainArc::Hook(a) => Arc::get_mut(a).is_some(),
+            DrainArc::Message(a) => Arc::get_mut(a).is_some(),
+            DrainArc::Adapter(a) => Arc::get_mut(a).is_some(),
+            DrainArc::Database(a) => Arc::get_mut(a).is_some(),
+        }
+    }
+}
+
 /// Phase indicator passed to [`Bot::run_hooks`].
 ///
 /// Distinct from [`HookType`] because dispatch needs to ask "what phase
@@ -111,6 +137,12 @@ impl Bot {
         }
     }
 
+    /// How long [`unregister_plugin`](Self::unregister_plugin) waits for in-flight
+    /// dispatch and adapter threads to release their references before leaking the
+    /// library to stay safe. Transient dispatch clears well under this; the bound
+    /// only bites a holder that never releases (e.g. an adapter blocked on I/O).
+    const UNLOAD_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1000);
+
     /// Reset the per-load conflict buffer. The plugin loader calls this right
     /// before invoking a plugin's `on_load`.
     pub fn begin_plugin_load(&self) {
@@ -134,13 +166,19 @@ impl Bot {
     /// plugin cell. Used by the loader to roll back a plugin that hit a name
     /// conflict mid-`on_load` (the cell is dropped separately by the caller).
     pub fn rollback_plugin_components(&self, plugin_name: &str) {
-        self.remove_plugin_components(plugin_name);
+        // Rollback runs during the failing plugin's on_load (single-threaded), so
+        // nothing else holds these Arcs — drop them immediately.
+        drop(self.remove_plugin_components(plugin_name));
     }
 
     /// Drop every command, hook, message handler, adapter, and database driver
     /// registered under `plugin_name`. Shared by [`unregister_plugin`] (full
     /// teardown) and conflict rollback.
-    fn remove_plugin_components(&self, plugin_name: &str) {
+    fn remove_plugin_components(&self, plugin_name: &str) -> Vec<DrainArc> {
+        // Move each removed Arc into `drained` instead of dropping it here, so the
+        // caller can wait out in-flight users before the dylib is unmapped.
+        let mut drained: Vec<DrainArc> = Vec::new();
+
         let removed_canonicals: Vec<String> = {
             let mut cmds = self.commands.write().unwrap();
             let to_remove: Vec<String> = cmds
@@ -149,7 +187,9 @@ impl Bot {
                 .map(|(k, _)| k.clone())
                 .collect();
             for k in &to_remove {
-                cmds.remove(k);
+                if let Some(entry) = cmds.remove(k) {
+                    drained.push(DrainArc::Command(entry.command));
+                }
             }
             to_remove
         };
@@ -161,19 +201,44 @@ impl Bot {
                 .retain(|_, canonical| !removed.contains(canonical.as_str()));
         }
 
-        self.hooks
-            .write()
-            .unwrap()
-            .retain(|e| e.plugin_name != plugin_name);
-        self.message_handlers
-            .write()
-            .unwrap()
-            .retain(|e| e.plugin_name != plugin_name);
-        self.adapters
-            .lock()
-            .unwrap()
-            .retain(|e| e.plugin_name != plugin_name);
-        self.databases.write().unwrap().remove(plugin_name);
+        {
+            let mut hooks = self.hooks.write().unwrap();
+            let mut i = 0;
+            while i < hooks.len() {
+                if hooks[i].plugin_name == plugin_name {
+                    drained.push(DrainArc::Hook(hooks.remove(i).hook));
+                } else {
+                    i += 1;
+                }
+            }
+        }
+        {
+            let mut handlers = self.message_handlers.write().unwrap();
+            let mut i = 0;
+            while i < handlers.len() {
+                if handlers[i].plugin_name == plugin_name {
+                    drained.push(DrainArc::Message(handlers.remove(i).handler));
+                } else {
+                    i += 1;
+                }
+            }
+        }
+        {
+            let mut adapters = self.adapters.lock().unwrap();
+            let mut i = 0;
+            while i < adapters.len() {
+                if adapters[i].plugin_name == plugin_name {
+                    drained.push(DrainArc::Adapter(adapters.remove(i).adapter));
+                } else {
+                    i += 1;
+                }
+            }
+        }
+        if let Some(db) = self.databases.write().unwrap().remove(plugin_name) {
+            drained.push(DrainArc::Database(db));
+        }
+
+        drained
     }
 
     /// Resolve `relative_path` under `root` and ensure the result is inside `root`.
@@ -303,10 +368,17 @@ impl Bot {
     }
 
     fn run_message_handlers(&self, event: &Event) {
-        let handlers = self.message_handlers.read().unwrap();
-        for entry in handlers.iter() {
-            if let Err(e) = entry.handler.handle(event) {
-                self.logger.error(entry.handler.name(), &format!("{:#}", e));
+        // Snapshot and release the lock before dispatch, mirroring run_hooks: a
+        // handler may re-enter the bot (emit, register/unregister a component),
+        // and holding the read lock across handle() risks a same-thread
+        // write-while-read deadlock.
+        let handlers: Vec<Arc<dyn MessageHandler>> = {
+            let handlers = self.message_handlers.read().unwrap();
+            handlers.iter().map(|e| e.handler.clone()).collect()
+        };
+        for handler in &handlers {
+            if let Err(e) = handler.handle(event) {
+                self.logger.error(handler.name(), &format!("{:#}", e));
             }
         }
     }
@@ -414,6 +486,17 @@ impl BotContext for Bot {
             }
 
             if abi.minor < current_plugin_abi.minor {
+                // 0.x: the minor is the breaking position (semver-zero), so an
+                // older minor is an incompatible ABI (e.g. a vtable change), not
+                // just feature-poorer — reject. From 1.x on it's additive: warn.
+                if current_plugin_abi.major == 0 {
+                    log::error!(
+                        "ABI minor version incompatible: plugin={}, runtime={} (0.x: older minor is a breaking ABI; rebuild the plugin)",
+                        abi,
+                        current_plugin_abi
+                    );
+                    return Err(PluginError::UnsupportedAbi)?;
+                }
                 log::warn!(
                     "ABI minor version mismatch: plugin={}, runtime={} (plugin built against older ABI, may miss new features)",
                     abi,
@@ -539,11 +622,9 @@ impl BotContext for Bot {
     }
 
     fn unregister_plugin(&self, name: &str) -> bool {
-        // Take the cell out of the map but DON'T drop it yet — every
-        // trait object registered by this plugin has its vtable in the
-        // plugin's `.so`, and dropping `cell` will eventually `dlclose`
-        // it. We must drop those Arcs first while the dylib is still
-        // mapped.
+        // Remove from the map first so no new on_event can clone the cell. Don't
+        // drop it yet — dropping runs destroy_plugin and dlcloses the dylib that
+        // holds every trait object's code and vtable.
         let mut cell = match self.plugins.write().unwrap().remove(name) {
             Some(c) => c,
             None => {
@@ -552,26 +633,79 @@ impl BotContext for Bot {
                 return false;
             }
         };
-
-        // on_unload needs &mut: wait out in-flight on_event snapshots so we're sole owner.
-        while Arc::get_mut(&mut cell).is_none() {
-            std::thread::yield_now();
-        }
-        Arc::get_mut(&mut cell).expect("sole owner").on_unload();
-
-        // Drop everything that points into the dylib's vtables.
-        self.remove_plugin_components(name);
-
+        // Drop the info now so list_plugins/status stop reporting the plugin while
+        // we drain (which can take up to UNLOAD_DRAIN_TIMEOUT).
         self.plugin_infos.write().unwrap().remove(name);
 
-        // Now safe: every Arc<dyn …> from this plugin has been dropped, so
-        // the dylib can unload (PluginCell::drop runs destroy_plugin and
-        // then `_keep_alive: Library` drops, calling dlclose).
-        drop(cell);
+        // Deregister components up front (no new dispatch can find them), keeping
+        // the removed Arcs so we can wait out in-flight users.
+        let mut drain = self.remove_plugin_components(name);
 
-        self.logger
-            .info("Bot", &format!("plugin '{}' unloaded", name));
-        // Emit after dropping cell and releasing all locks.
+        // Ask adapters to stop so their threads return and drop their Arcs (a
+        // cooperative one then quiesces and unloads cleanly; a non-cooperative one
+        // just leaks below). stop() must not block.
+        for component in &drain {
+            if let DrainArc::Adapter(adapter) = component {
+                adapter.stop();
+            }
+        }
+
+        // Wait until nothing from this plugin is still in use: the cell (in-flight
+        // on_event) and every component Arc (a dispatch clones + releases the lock
+        // before invoking; an adapter thread holds its Arc). on_unload needs &mut
+        // and drop(cell) dlcloses the dylib, so doing either while a clone is live
+        // is a use-after-free.
+        //
+        // Bounded: a holder may never release (adapter blocked on I/O, a database
+        // handle held by another plugin). Rather than hang or dlclose into live
+        // code, we give up at the deadline and leak the mapping (forget below) —
+        // safe, just unreclaimed until exit. (Leaking after the bound is safe;
+        // dlclose-ing after it would not be.)
+        let deadline = std::time::Instant::now() + Self::UNLOAD_DRAIN_TIMEOUT;
+        let mut spins = 0u32;
+        let quiesced = loop {
+            if Arc::get_mut(&mut cell).is_some() && drain.iter_mut().all(DrainArc::is_unique) {
+                break true;
+            }
+            if std::time::Instant::now() >= deadline {
+                break false;
+            }
+            // Yield first (clones usually drop at once), then sleep so a blocked
+            // holder can't peg a core while we wait out the deadline.
+            if spins < 64 {
+                std::thread::yield_now();
+                spins += 1;
+            } else {
+                std::thread::sleep(std::time::Duration::from_micros(200));
+            }
+        };
+
+        if quiesced {
+            // Sole owner: tear down in order — on_unload, drop components (Drop
+            // runs in the still-mapped dylib), then drop the cell (dlclose).
+            Arc::get_mut(&mut cell)
+                .expect("sole owner after drain")
+                .on_unload();
+            drop(drain);
+            drop(cell);
+            self.logger
+                .info("Bot", &format!("plugin '{}' unloaded", name));
+        } else {
+            // Still in use: drop our clones (safe — forget(cell) keeps the dylib
+            // mapped), skip on_unload (no &mut), and leak rather than dlclose into
+            // a live thread.
+            drop(drain);
+            std::mem::forget(cell);
+            self.logger.warn(
+                "Bot",
+                &format!(
+                    "plugin '{}' deregistered but still in use (e.g. a running adapter); leaked its library to stay memory-safe",
+                    name
+                ),
+            );
+        }
+
+        // Emit after releasing all references/locks.
         self.emit_event(Event::typed(EventType::PluginUnloaded, "Bot", name));
         true
     }

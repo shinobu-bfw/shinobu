@@ -746,8 +746,9 @@ fn write_generated_snb_manifest(
     ));
     content.push_str("edition = \"2024\"\n\n");
     content.push_str("[workspace]\n\n");
-    // mirror root [profile.release]; the nested [workspace] above detaches this crate
+    // mirror root [profile.release]; the nested [workspace] detaches this crate
     content.push_str("[profile.release]\n");
+    content.push_str("panic = \"unwind\"\n");
     content.push_str("strip = \"symbols\"\n");
     content.push_str("lto = \"thin\"\n");
     content.push_str("codegen-units = 1\n\n");
