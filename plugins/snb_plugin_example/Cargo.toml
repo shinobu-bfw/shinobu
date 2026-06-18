@@ -17,4 +17,4 @@ anyhow = { workspace = true }
 log = { workspace = true }
 snb_core = { workspace = true }
 snb_macros = { workspace = true }
-tokio = { version = "1", features = ["sync", "time", "rt"] }
+tokio = { version = "1", features = ["time", "rt"] }
