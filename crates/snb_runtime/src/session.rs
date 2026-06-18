@@ -1,5 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::RwLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use snb_core::session::{SessionKey, SessionManager, SessionMessage, SessionState};
@@ -29,6 +30,8 @@ pub struct InMemorySessionManager {
     sessions: RwLock<HashMap<SessionKey, SessionData>>,
     max_messages: usize,
     ttl: std::time::Duration,
+    start: Instant,
+    last_evict_ms: AtomicU64,
 }
 
 impl InMemorySessionManager {
@@ -37,14 +40,22 @@ impl InMemorySessionManager {
             sessions: RwLock::new(HashMap::new()),
             max_messages,
             ttl,
+            start: Instant::now(),
+            last_evict_ms: AtomicU64::new(0),
         }
     }
 
-    fn evict_expired(&self) {
-        self.sessions
-            .write()
-            .unwrap()
-            .retain(|_, data| data.last_active.elapsed() < self.ttl);
+    const EVICT_INTERVAL_MS: u64 = 60_000;
+
+    /// Evict expired sessions at most once per minute, reusing the caller's lock.
+    fn maybe_evict(&self, sessions: &mut HashMap<SessionKey, SessionData>) {
+        let now = self.start.elapsed().as_millis() as u64;
+        if now.saturating_sub(self.last_evict_ms.load(Ordering::Relaxed)) < Self::EVICT_INTERVAL_MS
+        {
+            return;
+        }
+        self.last_evict_ms.store(now, Ordering::Relaxed);
+        sessions.retain(|_, data| data.last_active.elapsed() < self.ttl);
     }
 
     /// Read a session, returning `default()` when it doesn't exist.
@@ -63,8 +74,8 @@ impl InMemorySessionManager {
 
 impl SessionManager for InMemorySessionManager {
     fn append_message(&self, key: &SessionKey, msg: SessionMessage) {
-        self.evict_expired();
         let mut sessions = self.sessions.write().unwrap();
+        self.maybe_evict(&mut sessions);
         let data = sessions.entry(key.clone()).or_insert_with(SessionData::new);
         data.messages.push_back(msg);
         while data.messages.len() > self.max_messages {
