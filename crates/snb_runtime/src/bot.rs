@@ -70,7 +70,7 @@ pub struct Bot {
     logger: Arc<dyn Logger>,
     config_dir: PathBuf,
     data_root: PathBuf,
-    plugins: RwLock<HashMap<String, PluginCell>>,
+    plugins: RwLock<HashMap<String, Arc<PluginCell>>>,
     plugin_infos: RwLock<HashMap<String, PluginInfo>>,
     commands: RwLock<HashMap<String, CommandEntry>>,
     /// alias -> canonical command name
@@ -504,19 +504,23 @@ impl BotContext for Bot {
             _ => {}
         }
 
-        // Dispatch to plugin on_event handlers.
-        // Use read lock — on_event takes &self so no mutable access needed.
-        let plugins = self.plugins.read().unwrap();
-        match &event.receiver {
-            Some(target) => {
-                if let Some(cell) = plugins.get(target.as_str()) {
-                    cell.on_event(&event);
-                }
+        // snapshot handles and drop the lock before on_event so a slow, re-entrant,
+        // or panicking handler can't starve, deadlock, or poison the registry lock.
+        let cells: Vec<Arc<PluginCell>> = {
+            let plugins = self.plugins.read().unwrap();
+            match &event.receiver {
+                Some(target) => plugins.get(target.as_str()).cloned().into_iter().collect(),
+                None => plugins.values().cloned().collect(),
             }
-            None => {
-                for cell in plugins.values() {
-                    cell.on_event(&event);
-                }
+        };
+        for cell in &cells {
+            // contain panics so one plugin can't abort the host (cf. run_async)
+            let name = cell.name().to_string();
+            let result =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| cell.on_event(&event)));
+            if result.is_err() {
+                self.logger
+                    .error(&name, "on_event panicked and was contained");
             }
         }
     }
@@ -532,7 +536,7 @@ impl BotContext for Bot {
         self.plugins
             .write()
             .unwrap()
-            .insert(plugin_name.clone(), plugin);
+            .insert(plugin_name.clone(), Arc::new(plugin));
 
         // Emit after releasing locks to avoid deadlock if a handler
         // tries to register another plugin.
@@ -554,8 +558,11 @@ impl BotContext for Bot {
             }
         };
 
-        // User's on_unload runs while the dylib is still mapped.
-        cell.on_unload();
+        // on_unload needs &mut: wait out in-flight on_event snapshots so we're sole owner.
+        while Arc::get_mut(&mut cell).is_none() {
+            std::thread::yield_now();
+        }
+        Arc::get_mut(&mut cell).expect("sole owner").on_unload();
 
         // Drop everything that points into the dylib's vtables.
         self.remove_plugin_components(name);
