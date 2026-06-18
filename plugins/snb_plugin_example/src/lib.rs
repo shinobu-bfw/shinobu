@@ -15,6 +15,20 @@ use snb_core::hook::HookType;
 use snb_core::session::{SessionKey, SessionMessage, SessionState};
 use snb_macros::{adapter, command, hook, message_handler, plugin};
 
+/// Build a reply event addressed back to `src`'s sender, mirroring its to/reply_to.
+fn reply(src: &Event, text: impl Into<String>) -> Event {
+    let mut resp = Event::message("MyPlugin", text);
+    if let Some(m) = &src.message {
+        let out = resp.message.as_mut().unwrap();
+        out.to = m.to.clone();
+        out.reply_to = m.id.clone();
+    }
+    if let Some(sender) = &src.sender {
+        resp.receiver = Some(sender.clone());
+    }
+    resp
+}
+
 // -- Commands ----------------------------------------------------------------
 
 #[command(name = "echo", aliases = ["say"])]
@@ -33,15 +47,7 @@ fn echo(ctx: &CommandContext) -> anyhow::Result<()> {
             sm.append_message(&key, SessionMessage::system("echo"));
             sm.set_state(&key, SessionState::WaitingForInput);
         }
-        let mut resp = Event::message("MyPlugin", "Send me a message to echo.");
-        if let Some(m) = msg {
-            resp.message.as_mut().unwrap().to = m.to.clone();
-            resp.message.as_mut().unwrap().reply_to = m.id.clone();
-        }
-        if let Some(sender) = &ctx.event.sender {
-            resp.receiver = Some(sender.clone());
-        }
-        bot.emit_event(resp);
+        bot.emit_event(reply(ctx.event, "Send me a message to echo."));
         return Ok(());
     }
 
@@ -53,30 +59,14 @@ fn echo(ctx: &CommandContext) -> anyhow::Result<()> {
         msg.and_then(|m| m.from.as_deref()),
         msg.and_then(|m| m.to.as_deref()),
     );
-    let mut resp = Event::message("MyPlugin", ctx.args);
-    if let Some(m) = msg {
-        resp.message.as_mut().unwrap().to = m.to.clone();
-        resp.message.as_mut().unwrap().reply_to = m.id.clone();
-    }
-    if let Some(sender) = &ctx.event.sender {
-        resp.receiver = Some(sender.clone());
-    }
-    bot.emit_event(resp);
+    bot.emit_event(reply(ctx.event, ctx.args));
     Ok(())
 }
 
 #[command(name = "ping")]
 fn ping(ctx: &CommandContext) -> anyhow::Result<()> {
     log::info!("[command] /ping source={}", ctx.event.source);
-    let mut resp = Event::message("MyPlugin", "pong!");
-    if let Some(msg) = &ctx.event.message {
-        resp.message.as_mut().unwrap().to = msg.to.clone();
-        resp.message.as_mut().unwrap().reply_to = msg.id.clone();
-    }
-    if let Some(sender) = &ctx.event.sender {
-        resp.receiver = Some(sender.clone());
-    }
-    snb_core::context::bot().emit_event(resp);
+    snb_core::context::bot().emit_event(reply(ctx.event, "pong!"));
     Ok(())
 }
 
@@ -100,13 +90,7 @@ fn echo_handler(event: &Event) -> anyhow::Result<()> {
                 .is_some_and(|m| m.role == "system" && m.content == "echo")
             {
                 // Echo the user's message and exit session mode.
-                let mut resp = Event::message("MyPlugin", &text);
-                resp.message.as_mut().unwrap().to = msg.to.clone();
-                resp.message.as_mut().unwrap().reply_to = msg.id.clone();
-                if let Some(sender) = &event.sender {
-                    resp.receiver = Some(sender.clone());
-                }
-                snb_core::context::bot().emit_event(resp);
+                snb_core::context::bot().emit_event(reply(event, &text));
                 sm.clear_session(&key);
                 return Ok(());
             }
