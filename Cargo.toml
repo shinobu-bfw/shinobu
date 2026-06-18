@@ -36,3 +36,9 @@ snb_status = { path = "crates/snb_status" }
 anyhow = "1"
 log = "0"
 toml = "1"
+
+[profile.release]
+# keep panic = "unwind": plugin panic containment relies on catch_unwind
+strip = "symbols"
+lto = "thin"
+codegen-units = 1
