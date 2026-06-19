@@ -15,7 +15,7 @@ use snb_core::hook::HookType;
 use snb_core::session::{SessionKey, SessionMessage, SessionState};
 use snb_macros::{adapter, command, hook, message_handler, plugin};
 
-/// Build a reply event addressed back to `src`'s sender, mirroring its to/reply_to.
+/// Build a reply event addressed back to `src`'s sender, mirroring its chat/reply_to.
 fn reply(src: &Event, text: impl Into<String>) -> Event {
     let mut resp = Event::message("MyPlugin", text);
     if let Some(m) = &src.message {
