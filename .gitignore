@@ -10,4 +10,5 @@
 *.so
 *.dll
 *.dylib
-.claude
+/.claude/*
+!/.claude/skills/
