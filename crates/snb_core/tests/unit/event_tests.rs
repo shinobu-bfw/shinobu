@@ -39,8 +39,6 @@ fn event_formatted_message() {
 #[test]
 fn message_text_concatenation() {
     let msg = Message {
-        id: None,
-        reply_to: None,
         content: vec![
             ContentItem::text("hello "),
             ContentItem::text("world"),
@@ -50,24 +48,19 @@ fn message_text_concatenation() {
                 file_id: None,
             },
         ],
-        from: None,
-        to: None,
-        at: Vec::new(),
-        chat_type: None,
-        is_admin: false,
-        delete_after: None,
+        ..Default::default()
     };
     assert_eq!(msg.text(), "hello world");
     assert!(msg.has_text());
 }
 
 #[test]
-fn event_with_sender_receiver() {
+fn event_with_reply_target_plugins() {
     let event = Event::command("test", "ping", "")
-        .with_sender("plugin_a")
-        .with_receiver("plugin_b");
-    assert_eq!(event.sender, Some("plugin_a".to_string()));
-    assert_eq!(event.receiver, Some("plugin_b".to_string()));
+        .with_reply_plugin("plugin_a")
+        .with_target_plugin("plugin_b");
+    assert_eq!(event.reply_plugin, Some("plugin_a".to_string()));
+    assert_eq!(event.target_plugin, Some("plugin_b".to_string()));
 }
 
 #[test]
@@ -89,4 +82,40 @@ fn content_item_builders() {
         }
         _ => panic!("Expected Text"),
     }
+}
+
+#[test]
+fn sender_and_chat_constructors_default_metadata() {
+    let s = Sender::new("42");
+    assert_eq!(s.id, "42");
+    assert_eq!(s.username, None);
+    assert_eq!(s.display_name, None);
+    assert_eq!(s.first_name, None);
+    assert!(!s.is_bot);
+    assert!(s.extra.is_empty());
+
+    let c = Chat::new("100");
+    assert_eq!(c.id, "100");
+    assert_eq!(c.kind, None);
+    assert_eq!(c.title, None);
+    assert!(c.extra.is_empty());
+}
+
+#[test]
+fn message_accessors_read_sender_and_chat() {
+    let mut msg = Message::default();
+    assert_eq!(msg.sender_id(), None);
+    assert_eq!(msg.chat_id(), ""); // default Chat has an empty id
+
+    msg.sender = Some(Sender::new("u7"));
+    msg.chat = Chat::new("c42");
+    assert_eq!(msg.sender_id(), Some("u7"));
+    assert_eq!(msg.chat_id(), "c42");
+}
+
+#[test]
+fn sender_extra_holds_platform_specific_metadata() {
+    let mut s = Sender::new("9");
+    s.extra.insert("is_premium".to_string(), "true".to_string());
+    assert_eq!(s.extra.get("is_premium").map(String::as_str), Some("true"));
 }
